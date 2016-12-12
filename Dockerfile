@@ -26,4 +26,4 @@ RUN echo 'options("repos"="http://cran.rstudio.com")' > .Rprofile
 RUN Rscript -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'))" -e "devtools::install_github('IRkernel/IRkernel')" -e "IRkernel::installspec(user = FALSE)"
 
 # Install other R packages
-RUN Rscript -e "install.packages(c('RSQLite', 'ggplot2', 'RColorBrewer', 'car', 'reshape2',  'gmodels',  'MASS', 'plyr', 'Hmisc', 'gridExtra', 'grid', 'pgirmess'))"
+RUN Rscript -e "install.packages(c('RSQLite', 'ggplot2', 'RColorBrewer', 'car', 'reshape2',  'gmodels',  'MASS', 'plyr', 'Hmisc', 'gridExtra', 'pgirmess'))"
