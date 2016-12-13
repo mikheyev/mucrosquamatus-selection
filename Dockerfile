@@ -16,7 +16,7 @@ ENV LC_ALL en_US.UTF-8
 ENV LANG en_US.UTF-8
 
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 381BA480
-RUN apt-get update
+RUN sed --in-place 's/httpredir.debian.org/debian-mirror.sakura.ne.jp/' /etc/apt/sources.list && apt-get update
 RUN apt-get install -y --fix-missing less tree emacs r-base r-base-core r-base-dev r-recommended libzmq3-dev libcurl4-gnutls-dev libgdal1-dev libgeos-dev
 
 # Set default CRAN repo
