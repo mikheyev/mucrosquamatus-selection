@@ -1,0 +1,119 @@
+# 
+import subprocess
+'''
+# Software requirements
+kmergenie
+nextclip
+'''
+
+RAWREADS = ["Pmucro1_S1_L001", "Pmucro1_S1_L002", "Pmucro3_S1_L001", "Pmucro3_S1_L002"]
+KMERS = 96
+BASEDIR = "/work/MikheyevU/sasha/mucrosquamatus-genome/src/"
+
+rule all:
+	input: "../data/assembly/discovar/discovar_sspace/L_RNA_scaffolder.fasta"
+
+rule pear:
+     input: "../data/reads/raw/{prefix}_R1_001.fastq", "../data/reads/raw/{prefix}_R2_001.fastq"
+     output: "../data/reads/merged/{prefix}.assembled.fastq"
+     shell: "pear -f {input[0]} -r {input[1]} -o {input} --min-overlap 10 --memory 48G --threads 10 -n 200 -m 600 -p 0.0001"
+
+rule kmergenie:
+     input: expand("../data/reads/merged/{prefix}_R1_001.fastq.assembled.fastq",prefix=RAWREADS)
+     output: "../output/kmergenie/histograms.dat"
+     shell: """echo {input} | sed 's/\\s\\+/\\n/g'  > reads.tmp;  \
+     kmergenie --diploid -t 10 -l 85 -k 215 -o {output} reads.tmp; \
+     rm reads.tmp"""
+
+rule abyss:
+	input: expand("/work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/{prefix}_R1_001.fastq.assembled.fastq",prefix=RAWREADS)
+	output: "../data/assembly/platanus/pmuc-contigs.fa"
+	shell: """ulimit -s 10240; module load openmpi.gcc/1.8.6;  mkdir -p ../data/assembly/{wildcards.kmer}; abyss-pe -C ../data/assembly/{wildcards.kmer} np=10 j=12   k={wildcards.kmer} name=pmuc in='{input}' """
+
+rule platanus:
+	input: expand("/work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/{prefix}_R1_001.fastq.assembled.cor.fq",prefix=RAWREADS)
+	output: "../data/assembly/platanus/Pmuc_contig.fa"
+	shell: """mkdir -p ../data/assembly/platanus; platanus assemble -t 12 -k 125 -c 3 -u 0.2 -d 0.3  -m 450 -o ../data/assembly/platanus/Pmuc  -f {input} """
+
+rule lighter:
+	input: expand("/work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/{prefix}_R1_001.fastq.assembled.fastq",prefix=RAWREADS)
+     	output: expand("/work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/{prefix}_R1_001.fastq.assembled.cor.fq",prefix=RAWREADS)
+	params: prefix=expand("-r /work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/{prefix}_R1_001.fastq.assembled.fastq",prefix=RAWREADS)
+	shell: """lighter {params.prefix} -k 23 1500000000 .1 -t 10 -od /work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/"""
+
+#	shell: """input=`for i in {input}; do echo -ne "-r "$i" "; done`; /apps/lighter $input -k 23 1500000000 .1 -t 10 -od /work/MikheyevU/sasha/mucrosquamatus-genome/data/reads/merged/"""
+
+rule removeDups:
+     input: expand("../data/reads/raw/{prefix}_R1_001.fastq",prefix=RAWREADS), expand("../data/reads/raw/{prefix}_R2_001.fastq",prefix=RAWREADS)
+     output: "../data/reads/raw/nodup.fq"
+     params: left=",".join(expand("../data/reads/raw/{prefix}_R1_001.fastq",prefix=RAWREADS)),right=",".join(expand("../data/reads/raw/{prefix}_R1_001.fastq",prefix=RAWREADS))
+     shell: "dedupe.sh threads=10 in1={params.left} in2={params.right} out={output} -Xmx280g"
+
+rule fastq2bam:
+     input: "../data/reads/raw/{prefix}_R1_001.fastq", "../data/reads/raw/{prefix}_R2_001.fastq"
+     output: "../data/reads/raw/{prefix}.bam"
+     shell: "java -jar /apps/unit/MikheyevU/picard-tools-1.66/FastqToSam.jar F1={input[0]} F2={input[1]} O=../data/reads/raw/{wildcards.prefix}.bam QUALITY_FORMAT=Standard PL=illumina RG=Pmuc SM=Pmuc "
+
+rule discovar:
+     input:  expand("../data/reads/raw/{prefix}.bam",prefix=RAWREADS)
+     output: "../data/assemby/discovar/a.final/a.lines.fasta"
+     params: infiles=",".join(expand("../data/reads/raw/{prefix}.bam",prefix=RAWREADS))
+     shell: "DiscovarDeNovo NUM_THREADS=10 READS={params.infiles} OUT_DIR=../data/assemby/discovar "
+
+rule bowtie2_build:
+     input: rules.discovar.output
+     output: "../data/assembly/discovar/discovar-contigs.1.bt2l"
+     shell: "module add bowtie2; bowtie2-build {input} ../data/assembly/discovar/discovar-contigs"
+
+rule nextclip:
+     input: "../data/reads/mate/{insert}_1.fastq", "../data/reads/mate/{insert}_2.fastq"
+     log: "../data/reads/mate/nextclip.{insert}.txt"
+     output: "../data/reads/mate/{insert}kb_A_R1.fastq", "../data/reads/mate/{insert}kb_A_R2.fastq"
+     shell: "nextclip --input_one {input[0]} --input_two {input[1]} \
+     --output_prefix ../data/reads/mate/{wildcards.insert}kb --log {log} --min_length 25 \
+     --number_of_reads 800000000 --trim_ends 0 --remove_duplicates" 
+
+rule merge_nextclip:
+     input: "../data/reads/mate/{insert}kb_A_R{rf}.fastq"
+     output: "../data/reads/mate/{insert}_clipped_{rf}.fastq"
+     shell: """a=$(echo {input} | sed 's/_A_/_\?_/'); cat $a > {output}"""
+
+# rule map_mates:
+#      input: "../data/reads/mate/{insert}_1.fastq", "../data/reads/mate/{insert}_2.fastq", rules.bowtie2_build.output
+#      output: protected("../data/assembly/discovar/{insert}.bam") #takes 2 days
+#      params: index="../data/assembly/discovar/discovar-contigs"
+#      shell: "module load bowtie2; bowtie2 --local --rf -p 8 -x {params.index} -1 {input[0]} -2 {input[1]} | samtools view -u - | novosort - --rd --ram 60G -c 2 -o {output} -i"
+# # convert bam to tab and remove reads that map to the same contig (most of them forced by bowtie2 to map within the expected size range and probably unreliable)
+# rule bam2tab:
+#      input: "../data/assembly/discovar/{insert}.bam"
+#      output: "../data/assembly/discovar/{insert}.tab"
+#      shell: """perl  /apps/unit/MikheyevU/sasha/SSPACE-STANDARD-3.0_linux-x86_64/tools/sam_bam2tab.pl {input} "" "" {output};\
+#      awk '$1!=$4' {output} > {output}.tmp; mv {output}.tmp {output}"""
+
+rule get_inserts:
+     input: expand(expand("../data/reads/mate/{{insert}}_clipped_{rf}.fastq", rf=[1,2]), insert=[5,15])
+     output: "../data/assembly/discovar/libraries.txt"
+     params: index="../data/assembly/discovar/discovar-contigs"
+     run:
+          import statistics
+          with open(output[0],"w") as outfile:
+               for idx in [0,1]:
+                    left = input[0+idx*2]
+                    right = input[1+idx*2]
+                    inserts = list(map(lambda x: int(x), shell("""module load bowtie2; bowtie2 -p 12 --very-fast --rf -I 2000 -X 16000 -x {params.index} -u 10000000 -1 {left} -2 {right} | samtools view - | awk '$9>0 {{print $9}}' """, iterable=True)))
+                    outfile.write("Lib%i\tbowtie\t%s\t%s\t%i\t%0.2f\tFR\n" % (idx, left, right, statistics.mean(inserts), statistics.stdev(inserts)*2/statistics.mean(inserts)))
+
+rule sspace:
+     input: rules.get_inserts.output, rules.discovar.output, expand("../data/reads/mate/{insert}_clipped_{rf}.fastq",insert=[5,15], rf=[1,2])
+     output: "../data/assembly/discovar/discovar_sspace/discovar_sspace.final.scaffolds.fasta"
+     shell: "module load bowtie/1.1.2 bwa.icc/0.7.10 ; perl /apps/unit/MikheyevU/sasha/SSPACE-STANDARD-3.0_linux-x86_64/SSPACE_Standard_v3.0.pl -l {input[0]} -s {input[1]} -p 1 -z 1000 -x 0 -T 12 -b discovar_sspace; mv discovar_sspace ../data/assembly/discovar/"
+
+rule blat:
+     input: rules.sspace.output,"../../mucrosquamatus-expression/data/assembly/trinity/Trinity.fasta"
+     output: "../data/assembly/discovar/discovar_sspace/trinity.psl"
+     shell: "blat -noHead  {input} {output}"
+
+rule L_RNA_scaffolder:
+     input: rules.blat.output, rules.sspace.output
+     output: "../data/assembly/discovar/discovar_sspace/L_RNA_scaffolder.fasta"
+     shell: "/apps/unit/MikheyevU/sasha/L_RNA_scaffolder/L_RNA_scaffolder.sh -d /apps/unit/MikheyevU/sasha/L_RNA_scaffolder/ -i {input[0]} -j {input[1]}"
