@@ -206,10 +206,10 @@ p2 <- ggplot(subset(snipre[snipre$type %in% keep, ], alpha >= 0), aes(type, alph
 geom_jitter(width=0.3, alpha=.3)+ stat_summary(fun.y = mean, geom = "point", color="red", size=10, shape=95) +
 stat_summary(fun.y = mean, geom = "point", color="red") +theme_bw()+
 scale_color_manual(values=c("grey","darkorange"))+theme(legend.position='none')+xlab("Protein class")+
-scale_alpha_manual(values = c(.1,1,1,1,1,1))
-pdf("plots/alpha.pdf", width=4,height =6 )
+scale_alpha_manual(values = c(.1,1,1,1,1,1))+ylab(expression(atop("Proportion of substitutions", paste("fixed by natural selection " (alpha)))))
+#pdf("plots/alpha.pdf", width=4,height =6 )
 grid.arrange(p1,p2, ncol=1, heights = c(1,3))
-dev.off()
+#dev.off()
 ```
 
 ```{r constraintByType}

@@ -17,7 +17,7 @@ ENV LANG en_US.UTF-8
 
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 381BA480
 RUN sed --in-place 's/httpredir.debian.org/debian-mirror.sakura.ne.jp/' /etc/apt/sources.list && apt-get update
-RUN apt-get install -y --fix-missing less tree emacs r-base r-base-core r-base-dev r-recommended libzmq3-dev libcurl4-gnutls-dev libgdal1-dev libgeos-dev
+RUN apt-get install -y --fix-missing less tree emacs r-base r-base-core r-base-dev r-recommended r-cran-rgl libzmq3-dev libcurl4-gnutls-dev libgdal1-dev libproj-dev libgeos-dev libcairo2-dev xorg libxaw7-dev
 
 # Set default CRAN repo
 RUN echo 'options("repos"="http://cran.rstudio.com")' > .Rprofile
@@ -26,4 +26,4 @@ RUN echo 'options("repos"="http://cran.rstudio.com")' > .Rprofile
 RUN Rscript -e "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'))" -e "devtools::install_github('IRkernel/IRkernel')" -e "IRkernel::installspec(user = FALSE)"
 
 # Install other R packages
-RUN Rscript -e "install.packages(c('RSQLite', 'ggplot2', 'RColorBrewer', 'car', 'reshape2',  'gmodels',  'MASS', 'plyr', 'Hmisc', 'gridExtra', 'rgdal', 'rgeos', 'pgirmess'), dependencies = TRUE)"
+RUN Rscript -e "install.packages(c('RSQLite', 'ggplot2', 'RColorBrewer', 'car', 'reshape2',  'gmodels',  'MASS', 'plyr', 'Hmisc', 'gridExtra', 'rgdal', 'shiny', 'gdtools', 'rgeos', 'pgirmess'), dependencies = TRUE)"
